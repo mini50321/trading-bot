@@ -12,9 +12,11 @@ from app.domain.execution import WebhookSignalIn
 from app.repo.signals import signals_repo
 from app.repo.system import system_repo
 from app.repo.users import users_repo
+from app.repo.affiliate import affiliate_repo
 from app.services.pocketoption_auth import pocketoption_auth
 from app.services.settlement_worker import settlement_worker
 from app.services.trade_engine import trade_engine
+from app.services.strategy_worker import strategy_worker
 from app.web.webhook_guard import (
     extract_client_ip,
     parse_webhook_json,
@@ -39,11 +41,13 @@ async def _startup():
     await mongo.connect()
     await pocketoption_auth.start()
     await settlement_worker.start()
+    await strategy_worker.start()
 
 
 @app.on_event("shutdown")
 async def _shutdown():
     await settlement_worker.stop()
+    await strategy_worker.stop()
     await pocketoption_auth.close()
     await mongo.close()
 
@@ -118,6 +122,42 @@ async def webhook(
             client_ip=ip,
         )
         raise HTTPException(status_code=500, detail=type(e).__name__)
+
+
+@app.post("/affiliate/postback")
+async def affiliate_postback(
+    request: Request,
+    x_affiliate_secret: str | None = Header(default=None, alias="x-affiliate-secret"),
+    x_affiliate_signature: str | None = Header(default=None, alias="x-affiliate-signature"),
+):
+    s = get_settings()
+    body = await request.body()
+
+    hmac_secret = s.optional_affiliate_postback_hmac_secret()
+    if hmac_secret:
+        if not verify_webhook_hmac_sha256(secret=hmac_secret, body=body, signature_header=x_affiliate_signature):
+            raise HTTPException(status_code=401, detail="invalid_signature")
+
+    shared = s.optional_affiliate_postback_secret()
+    if shared:
+        if not x_affiliate_secret or x_affiliate_secret != shared:
+            raise HTTPException(status_code=401, detail="unauthorized")
+
+    data = parse_webhook_json(body)
+    await affiliate_repo.record_event(data)
+    email = str(data.get("email") or data.get("user_email") or "").strip().lower()
+    status = str(data.get("status") or data.get("state") or "").strip().lower()
+    balance = data.get("balance")
+    patch: dict = {"status": status or None}
+    if balance is not None:
+        try:
+            patch["balance"] = float(balance)
+        except Exception:
+            patch["balance_raw"] = balance
+    if email:
+        await affiliate_repo.upsert_account_by_email(email, patch)
+    log_event("affiliate.postback", email=email or None, status=status or None)
+    return {"ok": True}
 
 
 @app.get("/admin/system")

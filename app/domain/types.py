@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class UserSettings(BaseModel):
     trading_enabled: bool = False
+    strategy_enabled: bool = False
     stake: float = 1.0
     expiry_seconds: int = 5
     assets: list[str] = Field(default_factory=list)

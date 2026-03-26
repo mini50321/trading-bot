@@ -18,6 +18,16 @@ WEBHOOK_HMAC_SECRET=
 WEBHOOK_RATE_LIMIT_PER_MINUTE=120
 WEBHOOK_TRUST_X_FORWARDED_FOR=false
 GLOBAL_MIN_PAYOUT_PERCENT=0
+AFFILIATE_POSTBACK_SECRET=
+AFFILIATE_POSTBACK_HMAC_SECRET=
+AFFILIATE_TRUST_X_FORWARDED_FOR=false
+STRATEGY_ENABLED_GLOBAL=false
+STRATEGY_POLL_INTERVAL_SECONDS=1.0
+STRATEGY_MIN_LEARNING_TICKS=30
+STRATEGY_MIN_CONFIDENCE=0.65
+STRATEGY_BUCKET_SECONDS=10
+STRATEGY_SIGNAL_EXPIRY_SECONDS=5
+STRATEGY_EMIT_COOLDOWN_SECONDS=3
 PO_API_BASE_URL=https://example.com
 PO_LOGIN_PATH=/api/login
 PO_PROFILE_PATH=/api/profile
@@ -98,6 +108,19 @@ send header `x-api-key: <ADMIN_API_KEY>`
 - If both are set, **both** checks must pass.
 - **Rate limit**: per client IP, `WEBHOOK_RATE_LIMIT_PER_MINUTE` requests per rolling 60s window (set `0` to disable). Behind a reverse proxy, set `WEBHOOK_TRUST_X_FORWARDED_FOR=true` and ensure the proxy sets `X-Forwarded-For`.
 - **Idempotency**: duplicate `(source, signal_id)` returns `status: duplicate` (unique index in MongoDB); use a stable `signal_id` per signal.
+
+### affiliate tracking (postbacks)
+The API exposes `POST /affiliate/postback` to ingest affiliate status/balance updates.
+
+- If `AFFILIATE_POSTBACK_SECRET` is set, send header `x-affiliate-secret: <AFFILIATE_POSTBACK_SECRET>`.
+- If `AFFILIATE_POSTBACK_HMAC_SECRET` is set, send header `x-affiliate-signature: sha256=<hex>` where `<hex>` is HMAC-SHA256(secret, raw request body).
+- The handler stores the raw payload in `affiliate_events` and upserts `affiliate_accounts` by `email` / `user_email` if present.
+
+### strategy (bot makes decisions)
+If `STRATEGY_ENABLED_GLOBAL=true`, the API runs a background worker that:
+- scans users with `settings.strategy_enabled=true`
+- watches their `assets` using WebSocket ticks
+- emits internal `source=strategy` signals when momentum thresholds hit (config via `STRATEGY_*`)
 
 ### risk / payout
 - Per-user (Telegram settings): **min payout %** (needs `payout` in `PO_ASSET_MAP_JSON`; unknown payout → trade blocked), **max stake per trade**, **max total stake per day** (sum of `stake` on all trades since UTC midnight).

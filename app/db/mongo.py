@@ -26,6 +26,9 @@ class Mongo:
         await self._db.trades.create_index("created_at")
         await self._db.trades.create_index([("telegram_id", 1), ("created_at", -1)])
         await self._db.system.create_index("key", unique=True)
+        await self._db.affiliate_events.create_index("created_at")
+        await self._db.affiliate_accounts.create_index("email", unique=True)
+        await self._db.affiliate_accounts.create_index("telegram_id")
 
     async def close(self) -> None:
         if self._client is not None:

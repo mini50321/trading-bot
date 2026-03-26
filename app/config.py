@@ -17,6 +17,17 @@ class Settings(BaseSettings):
     webhook_rate_limit_per_minute: int = 120
     webhook_trust_x_forwarded_for: bool = False
     global_min_payout_percent: float = 0.0
+    affiliate_postback_secret: str = ""
+    affiliate_postback_hmac_secret: str = ""
+    affiliate_trust_x_forwarded_for: bool = False
+
+    strategy_enabled_global: bool = False
+    strategy_poll_interval_seconds: float = 1.0
+    strategy_min_learning_ticks: int = 30
+    strategy_min_confidence: float = 0.65
+    strategy_bucket_seconds: int = 10
+    strategy_signal_expiry_seconds: int = 5
+    strategy_emit_cooldown_seconds: float = 3.0
     po_api_base_url: str = ""
     po_login_path: str = ""
     po_profile_path: str = ""
@@ -94,6 +105,12 @@ class Settings(BaseSettings):
 
     def optional_po_asset_map_json(self) -> str:
         return self.po_asset_map_json.strip()
+
+    def optional_affiliate_postback_secret(self) -> str:
+        return self.affiliate_postback_secret.strip()
+
+    def optional_affiliate_postback_hmac_secret(self) -> str:
+        return self.affiliate_postback_hmac_secret.strip()
 
     def pocketoption_place_trade_enabled(self) -> bool:
         return bool(self.po_api_base_url.strip() and self.po_place_trade_path.strip())

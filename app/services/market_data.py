@@ -75,6 +75,21 @@ class MarketDataService:
         async with self._lock:
             return sorted(self._user_symbols.get(telegram_id, set()))
 
+    async def get_recent_ticks(self, symbol: str, limit: int = 50) -> list[Tick]:
+        sym = (symbol or "").strip().lower()
+        if not sym:
+            return []
+        limit = max(0, min(500, int(limit)))
+        if limit == 0:
+            return []
+        async with self._lock:
+            dq = self._ticks.get(sym)
+            if not dq:
+                return []
+            if len(dq) <= limit:
+                return list(dq)
+            return list(dq)[-limit:]
+
     async def _current_symbols(self) -> list[str]:
         async with self._lock:
             return sorted(self._symbol_watchers.keys())

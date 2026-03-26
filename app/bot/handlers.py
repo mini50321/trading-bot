@@ -550,6 +550,21 @@ async def set_max_stake_day_value(message: Message, state: FSMContext):
     await message.answer("saved", reply_markup=settings_menu())
 
 
+@router.callback_query(F.data == "set:strategy_enabled")
+async def toggle_strategy(cb: CallbackQuery):
+    user = await _ensure_user_from_callback(cb)
+    if user.blocked:
+        await cb.message.answer("access denied")
+        await cb.answer()
+        return
+    new_val = not bool(user.settings.strategy_enabled)
+    await users_repo.update_settings(user.telegram_id, {"strategy_enabled": new_val})
+    user2 = await users_repo.get_user(user.telegram_id)
+    if user2 is not None:
+        await cb.message.answer(f"strategy {'enabled' if user2.settings.strategy_enabled else 'disabled'}", reply_markup=settings_menu())
+    await cb.answer()
+
+
 @router.callback_query(F.data == "set:max_trades_per_day")
 async def set_mtpd_start(cb: CallbackQuery, state: FSMContext):
     user = await _ensure_user_from_callback(cb)
