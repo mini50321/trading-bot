@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -10,12 +9,13 @@ from aiogram.enums import ParseMode
 from app.bot.handlers import router
 from app.config import get_settings
 from app.db.mongo import mongo
+from app.observability.log import configure_logging
 from app.services.market_data import market_data
 from app.services.pocketoption_auth import pocketoption_auth
 
 
 async def run_bot() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_logging(level=get_settings().log_level)
     await mongo.connect()
     await pocketoption_auth.start()
     await market_data.start()

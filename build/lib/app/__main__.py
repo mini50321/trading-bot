@@ -9,12 +9,12 @@ def main() -> None:
     try:
         asyncio.run(run_bot())
     except ValidationError as e:
-        if "bot_token" in str(e):
-            raise SystemExit(
-                "missing config. create .env with BOT_TOKEN, MONGODB_URI, MONGODB_DB.\n"
-                "see README.md and .env.example."
-            ) from e
-        raise
+        raise SystemExit(
+            "missing config. create .env with BOT_TOKEN, MONGODB_URI, MONGODB_DB.\n"
+            "see README.md and .env.example."
+        ) from e
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
 
 
 if __name__ == "__main__":

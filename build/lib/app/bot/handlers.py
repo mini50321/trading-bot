@@ -445,6 +445,111 @@ async def set_assets_value(message: Message, state: FSMContext):
     await message.answer("saved", reply_markup=settings_menu())
 
 
+@router.callback_query(F.data == "set:min_payout_percent")
+async def set_min_payout_start(cb: CallbackQuery, state: FSMContext):
+    user = await _ensure_user_from_callback(cb)
+    if user.blocked:
+        await cb.message.answer("access denied")
+        await cb.answer()
+        return
+    await state.set_state(SettingsFlow.min_payout_percent)
+    await cb.message.answer("send min payout percent (0 disables). requires payout in PO_ASSET_MAP_JSON")
+    await cb.answer()
+
+
+@router.message(SettingsFlow.min_payout_percent)
+async def set_min_payout_value(message: Message, state: FSMContext):
+    user = await _ensure_user_from_message(message)
+    if user is None:
+        return
+    if user.blocked:
+        await message.answer("access denied")
+        await state.clear()
+        return
+    txt = (message.text or "").strip()
+    try:
+        v = float(txt)
+    except Exception:
+        await message.answer("invalid number")
+        return
+    if v < 0 or v > 100:
+        await message.answer("out of range (0-100)")
+        return
+    await users_repo.update_settings(user.telegram_id, {"min_payout_percent": v})
+    await state.clear()
+    await message.answer("saved", reply_markup=settings_menu())
+
+
+@router.callback_query(F.data == "set:max_stake_per_trade")
+async def set_max_stake_trade_start(cb: CallbackQuery, state: FSMContext):
+    user = await _ensure_user_from_callback(cb)
+    if user.blocked:
+        await cb.message.answer("access denied")
+        await cb.answer()
+        return
+    await state.set_state(SettingsFlow.max_stake_per_trade)
+    await cb.message.answer("send max stake per trade (0 disables cap)")
+    await cb.answer()
+
+
+@router.message(SettingsFlow.max_stake_per_trade)
+async def set_max_stake_trade_value(message: Message, state: FSMContext):
+    user = await _ensure_user_from_message(message)
+    if user is None:
+        return
+    if user.blocked:
+        await message.answer("access denied")
+        await state.clear()
+        return
+    txt = (message.text or "").strip()
+    try:
+        v = float(txt)
+    except Exception:
+        await message.answer("invalid number")
+        return
+    if v < 0 or v > 1e12:
+        await message.answer("out of range")
+        return
+    await users_repo.update_settings(user.telegram_id, {"max_stake_per_trade": v})
+    await state.clear()
+    await message.answer("saved", reply_markup=settings_menu())
+
+
+@router.callback_query(F.data == "set:max_stake_per_day")
+async def set_max_stake_day_start(cb: CallbackQuery, state: FSMContext):
+    user = await _ensure_user_from_callback(cb)
+    if user.blocked:
+        await cb.message.answer("access denied")
+        await cb.answer()
+        return
+    await state.set_state(SettingsFlow.max_stake_per_day)
+    await cb.message.answer("send max total stake per day (0 disables). counts sum of trade stakes since utc midnight")
+    await cb.answer()
+
+
+@router.message(SettingsFlow.max_stake_per_day)
+async def set_max_stake_day_value(message: Message, state: FSMContext):
+    user = await _ensure_user_from_message(message)
+    if user is None:
+        return
+    if user.blocked:
+        await message.answer("access denied")
+        await state.clear()
+        return
+    txt = (message.text or "").strip()
+    try:
+        v = float(txt)
+    except Exception:
+        await message.answer("invalid number")
+        return
+    if v < 0 or v > 1e12:
+        await message.answer("out of range")
+        return
+    await users_repo.update_settings(user.telegram_id, {"max_stake_per_day": v})
+    await state.clear()
+    await message.answer("saved", reply_markup=settings_menu())
+
+
 @router.callback_query(F.data == "set:max_trades_per_day")
 async def set_mtpd_start(cb: CallbackQuery, state: FSMContext):
     user = await _ensure_user_from_callback(cb)

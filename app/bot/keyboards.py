@@ -31,6 +31,13 @@ def settings_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="set assets", callback_data="set:assets"),
             ],
             [
+                InlineKeyboardButton(text="min payout %", callback_data="set:min_payout_percent"),
+                InlineKeyboardButton(text="max stake/trade", callback_data="set:max_stake_per_trade"),
+            ],
+            [
+                InlineKeyboardButton(text="max stake/day", callback_data="set:max_stake_per_day"),
+            ],
+            [
                 InlineKeyboardButton(text="max trades/day", callback_data="set:max_trades_per_day"),
                 InlineKeyboardButton(text="max loss/day", callback_data="set:max_loss_per_day"),
             ],

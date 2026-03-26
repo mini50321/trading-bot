@@ -15,5 +15,17 @@ dependencies = [
   "uvicorn>=0.30.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
+
 [tool.ruff]
 line-length = 100

@@ -11,6 +11,9 @@ class UserSettings(BaseModel):
     stake: float = 1.0
     expiry_seconds: int = 5
     assets: list[str] = Field(default_factory=list)
+    min_payout_percent: float = 0.0
+    max_stake_per_trade: float = 0.0
+    max_stake_per_day: float = 0.0
     max_trades_per_day: int = 50
     max_loss_per_day: float = 0.0
     cooldown_seconds: int = 0

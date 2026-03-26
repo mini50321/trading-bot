@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from pymongo import ReturnDocument
+
 from app.db.mongo import mongo
 from app.domain.execution import Trade
 
@@ -33,6 +35,16 @@ class TradesRepo:
             return 0, 0.0
         return int(res[0].get("count") or 0), float(res[0].get("pnl") or 0.0)
 
+    async def sum_stake_since(self, telegram_id: int, since: datetime) -> float:
+        pipeline = [
+            {"$match": {"telegram_id": telegram_id, "created_at": {"$gte": since}}},
+            {"$group": {"_id": None, "total": {"$sum": "$stake"}}},
+        ]
+        res = await mongo.db.trades.aggregate(pipeline).to_list(length=1)
+        if not res:
+            return 0.0
+        return float(res[0].get("total") or 0.0)
+
     async def last_settled_results(self, telegram_id: int, limit: int) -> list[float]:
         if limit <= 0:
             return []
@@ -50,6 +62,25 @@ class TradesRepo:
             except Exception:
                 continue
         return out
+
+    async def claim_one_due_for_settlement(self, now: datetime) -> Trade | None:
+        candidate = await mongo.db.trades.find_one(
+            {"status": {"$in": ["opened", "created"]}, "expiry_at": {"$lte": now}},
+            sort=[("expiry_at", 1)],
+        )
+        if candidate is None:
+            return None
+        tid = str(candidate.get("trade_id") or "")
+        if not tid:
+            return None
+        updated = await mongo.db.trades.find_one_and_update(
+            {"trade_id": tid, "status": {"$in": ["opened", "created"]}},
+            {"$set": {"status": "settling"}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if updated is None:
+            return None
+        return Trade.model_validate(updated)
 
 
 trades_repo = TradesRepo()
