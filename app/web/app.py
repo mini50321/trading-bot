@@ -14,6 +14,7 @@ from app.repo.signals import signals_repo
 from app.repo.system import system_repo
 from app.repo.users import users_repo
 from app.repo.affiliate import affiliate_repo
+from app.repo.credentials import credentials_repo
 from app.repo.tokens import tokens_repo
 from app.services.pocketoption_auth import pocketoption_auth
 from app.services.settlement_worker import settlement_worker
@@ -262,6 +263,39 @@ async def admin_users(_: bool = Depends(_admin_auth), limit: int = 50):
     return {"users": [u.model_dump() for u in users]}
 
 
+@app.get("/admin/user_snapshot")
+async def admin_user_snapshot(telegram_id: int, _: bool = Depends(_admin_auth)):
+    """Operational view: user settings, martingale step, tokens, affiliate gate line, credential presence."""
+    user = await users_repo.get_user(telegram_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    aff = await affiliate_repo.describe_status(telegram_id)
+    bal = await tokens_repo.get_balance(telegram_id)
+    has_cred = await credentials_repo.has_credentials(telegram_id)
+    return {
+        "telegram_id": telegram_id,
+        "user": user.model_dump(mode="json"),
+        "token_balance": bal,
+        "affiliate_status": aff,
+        "has_credentials": has_cred,
+    }
+
+
+@app.get("/admin/affiliate_account")
+async def admin_affiliate_account(email: str, _: bool = Depends(_admin_auth)):
+    e = (email or "").strip().lower()
+    if not e or "@" not in e:
+        raise HTTPException(status_code=400, detail="invalid email")
+    doc = await mongo.db.affiliate_accounts.find_one({"email": e})
+    if doc is None:
+        return {"found": False, "email": e}
+    out = dict(doc)
+    oid = out.pop("_id", None)
+    if oid is not None:
+        out["_id"] = str(oid)
+    return {"found": True, "email": e, "account": out}
+
+
 @app.post("/admin/tokens/adjust")
 async def admin_tokens_adjust(body: TokenAdjustIn, _: bool = Depends(_admin_auth)):
     if body.delta != 0:
@@ -330,11 +364,24 @@ async def admin_diagnostics(_: bool = Depends(_admin_auth)):
     except Exception:
         pass
 
+    counts: dict[str, int] = {}
+    try:
+        counts["users"] = await mongo.db.users.count_documents({})
+        counts["affiliate_accounts"] = await mongo.db.affiliate_accounts.count_documents({})
+        counts["credentials_rows"] = await mongo.db.credentials.count_documents({})
+        counts["token_balances_nonzero"] = await mongo.db.token_balances.count_documents({"balance": {"$gt": 0}})
+        counts["martingale_users"] = await mongo.db.users.count_documents({"settings.martingale_enabled": True})
+        counts["token_ledger_24h"] = await mongo.db.token_ledger.count_documents({"created_at": {"$gte": since_24h}})
+    except Exception:
+        pass
+
     return {
         "mongodb_ok": mongo_ok,
         "mongodb_error": mongo_error,
         "global_trading_enabled": await system_repo.get_global_trading_enabled(),
         "settlement_worker_running": settlement_worker.running,
+        "strategy_worker_running": strategy_worker.running,
+        "counts": counts,
         "broker": {
             "pocketoption_place_trade": s.pocketoption_place_trade_enabled(),
             "pocketoption_trade_result": s.pocketoption_trade_result_enabled(),

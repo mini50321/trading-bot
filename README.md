@@ -196,7 +196,7 @@ Minimal JSON body for `POST /webhook` (`Content-Type: application/json`):
 - **`signal_id`**: idempotency key (duplicate `(source, signal_id)` is rejected without re-trading).
 - **`symbol`**: must match a user’s asset list and your `PO_ASSET_MAP_JSON` keys (lowercase).
 - **`direction`**: `UP` or `DOWN`.
-- **`payload`**: optional; stake / expiry override user defaults when present.
+- **`payload`**: optional; **stake** / expiry override user defaults when martingale is **off**; when **martingale is on**, stake comes from the ladder (payload stake ignored).
 
 ### curl examples (bash)
 Replace placeholders. If `WEBHOOK_SECRET` is set:
@@ -225,6 +225,38 @@ Admin diagnostics (requires `ADMIN_API_KEY`):
 curl -s http://localhost:8000/admin/diagnostics -H "x-api-key: YOUR_ADMIN_API_KEY"
 ```
 
+User operational snapshot (tokens, affiliate status line, `has_credentials`, full user document):
+
+```bash
+curl -s "http://localhost:8000/admin/user_snapshot?telegram_id=12345" -H "x-api-key: YOUR_ADMIN_API_KEY"
+```
+
+Affiliate row by email (postback / pending tokens / link):
+
+```bash
+curl -s "http://localhost:8000/admin/affiliate_account?email=user@example.com" -H "x-api-key: YOUR_ADMIN_API_KEY"
+```
+
+Token grant/debit:
+
+```bash
+curl -s -X POST http://localhost:8000/admin/tokens/adjust \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_ADMIN_API_KEY" \
+  -d '{"telegram_id":12345,"delta":50,"reason":"support"}'
+```
+
+### Production hardening & go-live checklist (step 6)
+Use this once the client supplies **real** PocketOption paths and `PO_ASSET_MAP_JSON` for their OTC list.
+
+1. **Secrets**: `BOT_TOKEN`, `MASTER_KEY`, `ADMIN_API_KEY`, webhook and affiliate HMAC/secrets set; never commit `.env`; rotate anything that appeared in chat.
+2. **MongoDB**: reachable from API and bot; `/health` ok; `/admin/diagnostics` shows `mongodb_ok`, `settlement_worker_running`, `strategy_worker_running`, and sensible `counts`.
+3. **Affiliate**: registration + email-confirmation postbacks hit `POST /affiliate/postback`; `/admin/affiliate_account?email=` shows `postback_received`, `email_confirmed`, `telegram_id`; user `/status` shows `affiliate: verified`.
+4. **Tokens**: deposit postbacks credit balance or `pending_tokens` until `/connect`; `/tokens` > 0 before live trading if `TOKEN_SYSTEM_ENABLED=true`.
+5. **Assets**: `PO_ASSET_MAP_JSON` keys match `/watch` symbols; OTC + payout floor satisfied; `/watch` warnings resolved.
+6. **Broker**: `pocketoption_place_trade` and `pocketoption_trade_result` true in diagnostics; dry-run with minimum stake; confirm settlement updates trades and martingale step in `/admin/user_snapshot` after wins/losses.
+7. **Logs**: structured `event=...` lines; watch for `trade.token_blocked`, `affiliate_blocked`, `token_blocked`, `place_failed`.
+
 ### powershell (Windows) webhook example
 ```powershell
 $body = '{"signal_id":"demo-ps-1","symbol":"eurusd","direction":"UP"}'
@@ -235,13 +267,15 @@ Invoke-RestMethod -Uri "http://localhost:8000/webhook" -Method Post `
 ```
 
 ### smoke tests (pytest)
-Install dev extras and run unit checks (no live MongoDB required):
+Install dev extras and run unit checks (no live MongoDB required for most tests):
 
 ```bash
 python -m pip install -U pip
 python -m pip install ".[dev]"
 python -m pytest tests/ -q
 ```
+
+Includes `tests/test_hardening.py` (martingale settlement hooks) alongside `tests/test_smoke.py`.
 
 ### features
 - telegram onboarding
@@ -253,5 +287,6 @@ python -m pytest tests/ -q
 - risk controls + global kill switch (stage 5)
 - background settlement worker (api process polls due `opened` / `created` trades; no per-trade sleep on webhook)
 - admin commands: list users, block/unblock user
+- admin HTTP: diagnostics (+ DB counts, worker flags), user snapshot, affiliate row lookup, token adjust
 - event logging to mongodb
 

@@ -27,6 +27,10 @@ class CredentialsRepo:
         await mongo.db.credentials.delete_one({"telegram_id": telegram_id})
         await mongo.db.sessions.delete_one({"telegram_id": telegram_id})
 
+    async def has_credentials(self, telegram_id: int) -> bool:
+        doc = await mongo.db.credentials.find_one({"telegram_id": int(telegram_id)}, projection={"_id": 1})
+        return doc is not None
+
     async def get_credentials(self, telegram_id: int) -> tuple[str, str] | None:
         doc = await mongo.db.credentials.find_one({"telegram_id": telegram_id})
         if doc is None:
