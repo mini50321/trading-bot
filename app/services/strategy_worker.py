@@ -10,6 +10,7 @@ from app.observability.log import log_event, log_exception
 from app.repo.signals import signals_repo
 from app.repo.system import system_repo
 from app.repo.users import users_repo
+from app.services.assets import assets
 from app.services.market_data import market_data
 from app.services.ultra_precision import UltraSignalEngine
 
@@ -87,6 +88,18 @@ class StrategyWorker:
                 for sym in sorted(symbols):
                     if self._stop.is_set():
                         break
+                    eff_payout = max(
+                        float(s.global_min_payout_percent or 0.0),
+                        float(s.trade_min_payout_floor_percent or 0.0),
+                    )
+                    min_p = eff_payout if eff_payout > 0 else None
+                    tradable, _reason = assets.is_tradable(
+                        sym,
+                        min_payout_percent=min_p,
+                        require_otc=s.trade_otc_only,
+                    )
+                    if not tradable:
+                        continue
                     ticks = await market_data.get_recent_ticks(sym, limit=200)
                     if not ticks:
                         continue

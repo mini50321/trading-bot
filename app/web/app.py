@@ -276,6 +276,8 @@ async def admin_diagnostics(_: bool = Depends(_admin_auth)):
             "pocketoption_place_trade": s.pocketoption_place_trade_enabled(),
             "pocketoption_trade_result": s.pocketoption_trade_result_enabled(),
             "asset_map_configured": bool(s.optional_po_asset_map_json()),
+            "trade_otc_only": s.trade_otc_only,
+            "trade_min_payout_floor_percent": s.trade_min_payout_floor_percent,
         },
         "trades_by_status": by_status,
         "trades_with_error_last_24h": trades_err_24h,

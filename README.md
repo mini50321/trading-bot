@@ -54,7 +54,7 @@ PO_TRADE_RESULT_OPEN_STATES=open,pending,active,running
 PO_TRADE_RESULT_POLL_INTERVAL_SECONDS=1.0
 PO_TRADE_RESULT_MAX_POLLS=45
 PO_TRADE_RESULT_EXTRA_WAIT_SECONDS=0
-PO_ASSET_MAP_JSON={"eurusd":{"id":"123","open":true,"payout":82}}
+PO_ASSET_MAP_JSON={"eurusd_otc":{"id":"123","open":true,"payout":92,"otc":true}}
 PO_WS_URL=wss://example.com/ws
 PO_WS_SUBSCRIBE_ACTION=subscribe
 PO_WS_SYMBOL_KEY=symbol
@@ -128,8 +128,12 @@ If `STRATEGY_ENABLED_GLOBAL=true`, the API runs a background worker that:
 
 ### risk / payout
 - Per-user (Telegram settings): **min payout %** (needs `payout` in `PO_ASSET_MAP_JSON`; unknown payout → trade blocked), **max stake per trade**, **max total stake per day** (sum of `stake` on all trades since UTC midnight).
-- **GLOBAL_MIN_PAYOUT_PERCENT**: floor merged with each user’s `min_payout_percent` (`max` of the two). `0` disables.
+- **GLOBAL_MIN_PAYOUT_PERCENT**: merged with each user’s `min_payout_percent` and **`TRADE_MIN_PAYOUT_FLOOR_PERCENT`** using **`max(...)`**. Set any of them to `0` to drop that term (floor defaults to **90** so OTC maps should list realistic `payout` values).
+- **OTC-only (`TRADE_OTC_ONLY`, default `true`)**: each entry in `PO_ASSET_MAP_JSON` should include `"otc": true` for symbols you trade. `"otc": false` or omitting `otc` on a bare `"id"` string marks the row as non-OTC or unknown → **not tradable** while OTC-only is on. `/watch` warns if a symbol fails these checks.
+- Strategy worker only runs the engine on symbols that **pass** OTC + payout rules (same floor as global merge; per-user min payout is still enforced again in `TradeEngine` per user).
 - **Global trading kill switch**: `/global_off` / `/global_on` (admins) or admin API (unchanged).
+
+Broker-side **live asset lists** are not auto-synced yet: fill `PO_ASSET_MAP_JSON` with your OTC symbols, broker `id`, `payout`, and `otc: true`. When PocketOption exposes a stable assets API in your deployment, a sync job can be added without changing the catalog schema.
 
 ### pocketoption trade result (settlement)
 After expiry, if `PO_TRADE_RESULT_PATH_TEMPLATE` is set (must include `{id}`), the bot polls the broker until it can read **`PO_TRADE_RESULT_PNL_PATH`** (preferred) or a terminal **`PO_TRADE_RESULT_STATE_PATH`** value (matched against the `*_STATES` lists). If the result endpoint is not configured, settlement falls back to the local price-compare simulation.

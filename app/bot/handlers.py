@@ -13,6 +13,7 @@ from app.repo.affiliate import affiliate_repo
 from app.repo.credentials import credentials_repo
 from app.repo.system import system_repo
 from app.repo.users import users_repo
+from app.services.assets import assets
 from app.services.market_data import market_data
 from app.services.pocketoption_auth import pocketoption_auth
 
@@ -227,9 +228,25 @@ async def watch_cmd(message: Message):
     if not symbols:
         await message.answer("no symbols")
         return
-    await users_repo.update_settings(user.telegram_id, {"assets": [s.lower() for s in symbols]})
+    lowered = [s.lower() for s in symbols]
+    await users_repo.update_settings(user.telegram_id, {"assets": lowered})
     await market_data.watch(user.telegram_id, symbols)
-    await message.answer("watching updated")
+    st = get_settings()
+    eff = max(
+        float(user.settings.min_payout_percent or 0.0),
+        float(st.global_min_payout_percent or 0.0),
+        float(st.trade_min_payout_floor_percent or 0.0),
+    )
+    min_p = eff if eff > 0 else None
+    warns: list[str] = []
+    for sym in lowered:
+        ok, reason = assets.is_tradable(sym, min_payout_percent=min_p, require_otc=st.trade_otc_only)
+        if not ok:
+            warns.append(f"{sym}: {reason}")
+    msg = "watching updated"
+    if warns:
+        msg += "\n\nnot tradable with current OTC/payout rules:\n" + "\n".join(warns)
+    await message.answer(msg)
 
 
 @router.message(Command("unwatch"))

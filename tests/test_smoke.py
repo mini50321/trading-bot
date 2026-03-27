@@ -84,3 +84,20 @@ def test_detect_email_confirmation_payload_flags() -> None:
     assert detect_email_confirmation("", {"email_confirmed": True}, [])
     assert detect_email_confirmation("", {"email_verified": "yes"}, [])
     assert not detect_email_confirmation("", {"email_confirmed": False}, [])
+
+
+def test_is_tradable_otc_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import assets as assets_mod
+
+    class S:
+        trade_otc_only = True
+        optional_po_asset_map_json = staticmethod(
+            lambda: '{"good":{"id":"1","otc":true,"payout":92},"bad":{"id":"2","otc":false,"payout":92},"bare":"3"}'
+        )
+
+    monkeypatch.setattr(assets_mod, "get_settings", lambda: S())
+    cat = assets_mod.AssetCatalog()
+    assert cat.is_tradable("good", min_payout_percent=90.0, require_otc=True)[0]
+    assert cat.is_tradable("good", min_payout_percent=93.0, require_otc=True) == (False, "payout_below_threshold")
+    assert cat.is_tradable("bad", min_payout_percent=90.0, require_otc=True) == (False, "not_otc")
+    assert cat.is_tradable("bare", min_payout_percent=None, require_otc=True) == (False, "otc_unknown")

@@ -333,12 +333,18 @@ class TradeEngine:
                 "reason": aff_reason,
             }
 
+        cfg = get_settings()
         eff_min_payout = max(
             float(user.settings.min_payout_percent or 0.0),
-            float(get_settings().global_min_payout_percent or 0.0),
+            float(cfg.global_min_payout_percent or 0.0),
+            float(cfg.trade_min_payout_floor_percent or 0.0),
         )
         min_p_req = eff_min_payout if eff_min_payout > 0 else None
-        ok, reason = assets.is_tradable(symbol, min_payout_percent=min_p_req)
+        ok, reason = assets.is_tradable(
+            symbol,
+            min_payout_percent=min_p_req,
+            require_otc=cfg.trade_otc_only,
+        )
         if not ok:
             return {"telegram_id": telegram_id, "trade_id": trade_id, "status": "asset_blocked", "reason": reason}
 

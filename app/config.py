@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     webhook_rate_limit_per_minute: int = 120
     webhook_trust_x_forwarded_for: bool = False
     global_min_payout_percent: float = 0.0
+    trade_otc_only: bool = True
+    trade_min_payout_floor_percent: float = 90.0
     affiliate_postback_secret: str = ""
     affiliate_postback_hmac_secret: str = ""
     affiliate_trust_x_forwarded_for: bool = False
