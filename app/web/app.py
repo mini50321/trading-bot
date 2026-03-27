@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import ValidationError
@@ -146,17 +147,28 @@ async def affiliate_postback(
     data = parse_webhook_json(body)
     await affiliate_repo.record_event(data)
     email = str(data.get("email") or data.get("user_email") or "").strip().lower()
-    status = str(data.get("status") or data.get("state") or "").strip().lower()
-    balance = data.get("balance")
-    patch: dict = {"status": status or None}
-    if balance is not None:
-        try:
-            patch["balance"] = float(balance)
-        except Exception:
-            patch["balance_raw"] = balance
+    event_hint = (
+        data.get("event")
+        or data.get("type")
+        or data.get("action")
+        or data.get("postback_type")
+        or data.get("event_type")
+    )
+    event_label = str(event_hint).strip().lower() if event_hint is not None else ""
+    # Verification only: mark that PocketPartners (or similar) notified us about this email.
+    # User balances and profile are read from PocketOption APIs, not from postbacks.
+    patch: dict[str, Any] = {
+        "postback_received": True,
+        "last_postback_at": datetime.now(timezone.utc),
+        "last_postback_event": event_label or None,
+    }
     if email:
         await affiliate_repo.upsert_account_by_email(email, patch)
-    log_event("affiliate.postback", email=email or None, status=status or None)
+    log_event(
+        "affiliate.postback",
+        email=email or None,
+        event=event_label or None,
+    )
     return {"ok": True}
 
 
@@ -255,6 +267,7 @@ async def admin_diagnostics(_: bool = Depends(_admin_auth)):
         "trades_by_status": by_status,
         "trades_with_error_last_24h": trades_err_24h,
         "log_level": s.log_level,
+        "affiliate_gate_required": s.affiliate_gate_required,
     }
 
 

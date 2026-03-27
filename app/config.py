@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     affiliate_postback_secret: str = ""
     affiliate_postback_hmac_secret: str = ""
     affiliate_trust_x_forwarded_for: bool = False
+    affiliate_gate_required: bool = True
 
     strategy_enabled_global: bool = False
     strategy_poll_interval_seconds: float = 1.0

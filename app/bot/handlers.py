@@ -9,6 +9,7 @@ from app.bot.formatting import user_status_text
 from app.bot.keyboards import main_menu, settings_menu
 from app.bot.state import ConnectFlow, SettingsFlow
 from app.config import get_settings
+from app.repo.affiliate import affiliate_repo
 from app.repo.credentials import credentials_repo
 from app.repo.system import system_repo
 from app.repo.users import users_repo
@@ -76,7 +77,11 @@ async def status_cmd(message: Message):
     if user.blocked:
         await message.answer("access denied")
         return
-    await message.answer(user_status_text(user), reply_markup=main_menu(user.settings.trading_enabled))
+    aff = await affiliate_repo.describe_status(user.telegram_id)
+    await message.answer(
+        user_status_text(user) + f"\naffiliate: {aff}",
+        reply_markup=main_menu(user.settings.trading_enabled),
+    )
 
 
 @router.message(Command("settings"))
@@ -167,6 +172,7 @@ async def connect_password(message: Message, state: FSMContext):
         await state.clear()
         return
     await credentials_repo.set_credentials(user.telegram_id, email, password)
+    await affiliate_repo.link_telegram_id(email, user.telegram_id)
     await state.clear()
     try:
         await pocketoption_auth.login_for_user(user.telegram_id)
@@ -185,6 +191,7 @@ async def disconnect_cmd(message: Message, state: FSMContext):
         await message.answer("access denied")
         return
     await credentials_repo.delete_credentials(user.telegram_id)
+    await affiliate_repo.clear_telegram_link(user.telegram_id)
     await message.answer("disconnected")
 
 
@@ -284,7 +291,11 @@ async def menu_status(cb: CallbackQuery):
         await cb.message.answer("access denied")
         await cb.answer()
         return
-    await cb.message.answer(user_status_text(user), reply_markup=main_menu(user.settings.trading_enabled))
+    aff = await affiliate_repo.describe_status(user.telegram_id)
+    await cb.message.answer(
+        user_status_text(user) + f"\naffiliate: {aff}",
+        reply_markup=main_menu(user.settings.trading_enabled),
+    )
     await cb.answer()
 
 

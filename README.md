@@ -110,11 +110,13 @@ send header `x-api-key: <ADMIN_API_KEY>`
 - **Idempotency**: duplicate `(source, signal_id)` returns `status: duplicate` (unique index in MongoDB); use a stable `signal_id` per signal.
 
 ### affiliate tracking (postbacks)
-The API exposes `POST /affiliate/postback` to ingest affiliate status/balance updates.
+The API exposes `POST /affiliate/postback` so Pocket Partners (or similar) can notify you that an email registered under your link. **Postbacks are used for affiliate verification only**: the handler sets `postback_received` / `last_postback_event` on `affiliate_accounts` and does **not** persist broker balance from the postback (use PocketOption APIs for balance/profile).
 
 - If `AFFILIATE_POSTBACK_SECRET` is set, send header `x-affiliate-secret: <AFFILIATE_POSTBACK_SECRET>`.
 - If `AFFILIATE_POSTBACK_HMAC_SECRET` is set, send header `x-affiliate-signature: sha256=<hex>` where `<hex>` is HMAC-SHA256(secret, raw request body).
-- The handler stores the raw payload in `affiliate_events` and upserts `affiliate_accounts` by `email` / `user_email` if present.
+- The handler stores the full raw payload in `affiliate_events` and merges verification fields into `affiliate_accounts` when `email` / `user_email` is present.
+
+**Trading gate (`AFFILIATE_GATE_REQUIRED`, default `true`)**: auto-trades (webhook + strategy) are allowed only if the user has run `/connect` with the **same email** that received a postback, that email row has `telegram_id` equal to their Telegram id, and `postback_received` is true. Set `AFFILIATE_GATE_REQUIRED=false` for local dev without postbacks. `/status` shows `affiliate: verified` or `not_verified:<reason>`.
 
 ### strategy (bot makes decisions)
 If `STRATEGY_ENABLED_GLOBAL=true`, the API runs a background worker that:

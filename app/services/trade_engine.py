@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.domain.execution import StoredSignal, Trade
 from app.integrations.pocketoption.errors import PocketOptionHttpError
 from app.integrations.pocketoption.jsonpath import get_by_dotted_path
+from app.repo.affiliate import affiliate_repo
 from app.repo.credentials import credentials_repo
 from app.repo.system import system_repo
 from app.repo.trades import trades_repo
@@ -315,6 +316,22 @@ class TradeEngine:
             return {"telegram_id": telegram_id, "trade_id": trade_id, "status": "failed"}
         if user.blocked or not user.settings.trading_enabled:
             return {"telegram_id": telegram_id, "trade_id": trade_id, "status": "skipped"}
+
+        ok_aff, aff_reason = await affiliate_repo.is_trading_allowed(telegram_id)
+        if not ok_aff:
+            log_event(
+                "trade.affiliate_blocked",
+                telegram_id=telegram_id,
+                trade_id=trade_id,
+                symbol=symbol,
+                reason=aff_reason,
+            )
+            return {
+                "telegram_id": telegram_id,
+                "trade_id": trade_id,
+                "status": "affiliate_blocked",
+                "reason": aff_reason,
+            }
 
         eff_min_payout = max(
             float(user.settings.min_payout_percent or 0.0),
