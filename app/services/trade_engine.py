@@ -12,6 +12,7 @@ from app.integrations.pocketoption.errors import PocketOptionHttpError
 from app.integrations.pocketoption.jsonpath import get_by_dotted_path
 from app.repo.affiliate import affiliate_repo
 from app.repo.credentials import credentials_repo
+from app.repo.tokens import tokens_repo
 from app.repo.system import system_repo
 from app.repo.trades import trades_repo
 from app.repo.users import users_repo
@@ -397,8 +398,28 @@ class TradeEngine:
         if resolved_asset is None:
             return {"telegram_id": telegram_id, "trade_id": trade_id, "status": "asset_blocked", "reason": "asset_not_mapped"}
 
-        settings = get_settings()
-        use_po = settings.pocketoption_place_trade_enabled()
+        cfg = get_settings()
+        token_paid = False
+        if cfg.token_system_enabled:
+            ntok = int(cfg.tokens_per_trade)
+            if ntok > 0:
+                if not await tokens_repo.try_consume(telegram_id, ntok):
+                    log_event(
+                        "trade.token_blocked",
+                        telegram_id=telegram_id,
+                        trade_id=trade_id,
+                        symbol=symbol,
+                        need=ntok,
+                    )
+                    return {
+                        "telegram_id": telegram_id,
+                        "trade_id": trade_id,
+                        "status": "token_blocked",
+                        "reason": "insufficient_tokens",
+                    }
+                token_paid = True
+
+        use_po = cfg.pocketoption_place_trade_enabled()
         place_raw: dict[str, Any] = {}
 
         if use_po:
@@ -459,6 +480,15 @@ class TradeEngine:
                         http_status=e.status,
                         op=e.op,
                     )
+                    if token_paid and cfg.token_system_enabled:
+                        rtok = int(cfg.tokens_per_trade)
+                        if rtok > 0:
+                            await tokens_repo.add_tokens(
+                                telegram_id,
+                                rtok,
+                                "refund_place_failed",
+                                {"trade_id": trade_id, "symbol": symbol},
+                            )
                     return {"telegram_id": telegram_id, "trade_id": trade_id, "status": "place_failed"}
 
             prices = await market_data.get_prices([symbol])

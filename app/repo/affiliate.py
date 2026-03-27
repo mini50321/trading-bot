@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from pymongo import ReturnDocument
+
 from app.config import get_settings
 from app.db.mongo import mongo
 
@@ -41,6 +43,37 @@ class AffiliateRepo:
             {"telegram_id": int(telegram_id)},
             {"$unset": {"telegram_id": ""}, "$set": {"updated_at": _now()}},
         )
+
+    async def get_account_by_email(self, email: str) -> dict[str, Any] | None:
+        e = (email or "").strip().lower()
+        if not e:
+            return None
+        return await mongo.db.affiliate_accounts.find_one({"email": e})
+
+    async def add_pending_tokens(self, email: str, delta: int) -> None:
+        if delta <= 0:
+            return
+        e = (email or "").strip().lower()
+        if not e:
+            return
+        await mongo.db.affiliate_accounts.update_one(
+            {"email": e},
+            {"$inc": {"pending_tokens": int(delta)}, "$set": {"updated_at": _now()}},
+            upsert=True,
+        )
+
+    async def take_pending_tokens(self, email: str) -> int:
+        e = (email or "").strip().lower()
+        if not e:
+            return 0
+        doc = await mongo.db.affiliate_accounts.find_one_and_update(
+            {"email": e},
+            {"$set": {"pending_tokens": 0, "updated_at": _now()}},
+            return_document=ReturnDocument.BEFORE,
+        )
+        if not doc:
+            return 0
+        return max(0, int(doc.get("pending_tokens") or 0))
 
     async def is_trading_allowed(self, telegram_id: int) -> tuple[bool, str | None]:
         """

@@ -101,3 +101,21 @@ def test_is_tradable_otc_only(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cat.is_tradable("good", min_payout_percent=93.0, require_otc=True) == (False, "payout_below_threshold")
     assert cat.is_tradable("bad", min_payout_percent=90.0, require_otc=True) == (False, "not_otc")
     assert cat.is_tradable("bare", min_payout_percent=None, require_otc=True) == (False, "otc_unknown")
+
+
+def test_deposit_token_brackets() -> None:
+    from types import SimpleNamespace
+
+    from app.services.token_deposit import deposit_tokens_for_amount
+
+    s = SimpleNamespace(
+        token_deposit_min_usd=20.0,
+        token_bracket_low_grant=15,
+        token_bracket_high_min_usd=100.0,
+        token_bracket_high_per_dollar=1.0,
+    )
+    assert deposit_tokens_for_amount(19, s) == 0
+    assert deposit_tokens_for_amount(50, s) == 15
+    assert deposit_tokens_for_amount(99, s) == 15
+    assert deposit_tokens_for_amount(100, s) == 100
+    assert deposit_tokens_for_amount(150, s) == 150

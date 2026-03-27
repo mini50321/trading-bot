@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.config import get_settings
 from app.db.mongo import mongo
@@ -14,10 +14,17 @@ from app.repo.signals import signals_repo
 from app.repo.system import system_repo
 from app.repo.users import users_repo
 from app.repo.affiliate import affiliate_repo
+from app.repo.tokens import tokens_repo
 from app.services.pocketoption_auth import pocketoption_auth
 from app.services.settlement_worker import settlement_worker
 from app.services.trade_engine import trade_engine
 from app.services.affiliate_email import detect_email_confirmation
+from app.services.token_deposit import (
+    deposit_dedupe_key,
+    deposit_tokens_for_amount,
+    detect_deposit_postback,
+    parse_deposit_amount_usd,
+)
 from app.services.strategy_worker import strategy_worker
 from app.web.webhook_guard import (
     extract_client_ip,
@@ -25,6 +32,12 @@ from app.web.webhook_guard import (
     verify_webhook_hmac_sha256,
     webhook_rate_limiter,
 )
+
+
+class TokenAdjustIn(BaseModel):
+    telegram_id: int
+    delta: int
+    reason: str = "admin_api"
 
 
 app = FastAPI()
@@ -176,6 +189,46 @@ async def affiliate_postback(
         patch["email_confirmed_at"] = datetime.now(timezone.utc)
     if email:
         await affiliate_repo.upsert_account_by_email(email, patch)
+
+    if email and s.token_system_enabled:
+        if detect_deposit_postback(event_label, data, s.token_deposit_event_list()):
+            amt = parse_deposit_amount_usd(data)
+            if amt is not None:
+                ntok = deposit_tokens_for_amount(amt, s)
+                if ntok > 0:
+                    dk = deposit_dedupe_key(email, event_label, data)
+                    acc = await affiliate_repo.get_account_by_email(email)
+                    tid = (acc or {}).get("telegram_id")
+                    meta_tok = {
+                        "email": email,
+                        "amount_usd": amt,
+                        "event": event_label,
+                    }
+                    if tid:
+                        credited = await tokens_repo.add_tokens(
+                            int(tid),
+                            ntok,
+                            "affiliate_deposit",
+                            meta_tok,
+                            dedupe_key=dk,
+                        )
+                        log_event(
+                            "tokens.credited",
+                            telegram_id=int(tid),
+                            tokens=ntok,
+                            email=email,
+                            credited=credited,
+                            dedupe=bool(dk),
+                        )
+                    else:
+                        await affiliate_repo.add_pending_tokens(email, ntok)
+                        log_event(
+                            "tokens.pending",
+                            email=email,
+                            tokens=ntok,
+                            dedupe_key=dk,
+                        )
+
     log_event(
         "affiliate.postback",
         email=email or None,
@@ -207,6 +260,16 @@ async def admin_users(_: bool = Depends(_admin_auth), limit: int = 50):
     limit = max(1, min(500, int(limit)))
     users = await users_repo.list_users(limit=limit)
     return {"users": [u.model_dump() for u in users]}
+
+
+@app.post("/admin/tokens/adjust")
+async def admin_tokens_adjust(body: TokenAdjustIn, _: bool = Depends(_admin_auth)):
+    if body.delta != 0:
+        await tokens_repo.add_tokens(
+            body.telegram_id, body.delta, body.reason, {"via": "admin_api"}
+        )
+    bal = await tokens_repo.get_balance(body.telegram_id)
+    return {"ok": True, "telegram_id": body.telegram_id, "balance": bal}
 
 
 @app.get("/admin/trades")
@@ -284,6 +347,8 @@ async def admin_diagnostics(_: bool = Depends(_admin_auth)):
         "log_level": s.log_level,
         "affiliate_gate_required": s.affiliate_gate_required,
         "affiliate_email_confirm_required": s.affiliate_email_confirm_required,
+        "token_system_enabled": s.token_system_enabled,
+        "tokens_per_trade": s.tokens_per_trade,
     }
 
 

@@ -28,6 +28,14 @@ class Settings(BaseSettings):
         "email confirmation,email_confirmation,emailconfirmed,confirm_email,mail_confirm"
     )
 
+    token_system_enabled: bool = True
+    tokens_per_trade: int = 1
+    token_deposit_events: str = "first deposit,first_deposit,re-deposit,redeposit,rediposit,deposit"
+    token_deposit_min_usd: float = 20.0
+    token_bracket_low_grant: int = 15
+    token_bracket_high_min_usd: float = 100.0
+    token_bracket_high_per_dollar: float = 1.0
+
     strategy_enabled_global: bool = False
     strategy_poll_interval_seconds: float = 1.0
     strategy_min_learning_ticks: int = 30
@@ -121,6 +129,12 @@ class Settings(BaseSettings):
 
     def affiliate_email_confirm_event_list(self) -> list[str]:
         raw = self.affiliate_email_confirm_events.strip()
+        if not raw:
+            return []
+        return [x for x in (p.strip() for p in raw.split(",")) if x]
+
+    def token_deposit_event_list(self) -> list[str]:
+        raw = self.token_deposit_events.strip()
         if not raw:
             return []
         return [x for x in (p.strip() for p in raw.split(",")) if x]

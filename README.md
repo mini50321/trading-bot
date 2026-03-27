@@ -120,6 +120,14 @@ The API exposes `POST /affiliate/postback` so Pocket Partners (or similar) can n
 
 **Email confirmation (`AFFILIATE_EMAIL_CONFIRM_REQUIRED`, default `true`)**: when the affiliate gate is on, trading also requires `email_confirmed` on that affiliate row. Configure a separate Pocket Partners postback for the **Email confirmation** event (in addition to registration). Incoming JSON is classified using `AFFILIATE_EMAIL_CONFIRM_EVENTS` (comma-separated substrings matched case-insensitively against the event field), and optional payload keys `email_confirmed` / `email_verified` / `is_email_confirmed`. Set `AFFILIATE_EMAIL_CONFIRM_REQUIRED=false` to skip (e.g. staging).
 
+### trade tokens (deposits → balance; spend per trade)
+When **`TOKEN_SYSTEM_ENABLED=true`** (default):
+
+- **Credits**: `POST /affiliate/postback` classifies **deposit** events via `TOKEN_DEPOSIT_EVENTS` (substring match on the event field, same style as email confirmation). The handler reads a USD amount from common keys (`amount`, `deposit`, `deposit_amount`, …). Conversion (defaults match the client brief): **below `TOKEN_DEPOSIT_MIN_USD` (20)** → 0 tokens; **$20 up to (but not including) `TOKEN_BRACKET_HIGH_MIN_USD` (100)** → **`TOKEN_BRACKET_LOW_GRANT` (15)** tokens per qualifying postback; **≥ 100** → **`floor(amount) * TOKEN_BRACKET_HIGH_PER_DOLLAR`** (default 1:1). If the postback includes `transaction_id` / `deposit_id` / similar, it is used to **dedupe** ledger rows so the same deposit is not credited twice. If the user has not `/connect`ed yet, tokens are stored as **`pending_tokens`** on `affiliate_accounts` and are applied on connect (**pending** increments are not deduped—prefer sending stable transaction ids in postbacks, or rely on dedupe after the account is linked).
+- **Debits**: Each opened trade consumes **`TOKENS_PER_TRADE`** (default 1). Insufficient balance → `token_blocked`. If PocketOption **place** fails after a debit, tokens are **refunded** (`refund_place_failed`).
+- **Telegram**: `/tokens` shows balance; `/status` includes `tokens:`. Admins: `/admin_tokens <telegram_id> <delta>` or `POST /admin/tokens/adjust` with JSON `{"telegram_id", "delta", "reason"}`.
+- Disable for dev: `TOKEN_SYSTEM_ENABLED=false` or `TOKENS_PER_TRADE=0`.
+
 ### strategy (bot makes decisions)
 If `STRATEGY_ENABLED_GLOBAL=true`, the API runs a background worker that:
 - scans users with `settings.strategy_enabled=true`

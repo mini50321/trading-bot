@@ -29,6 +29,14 @@ class Mongo:
         await self._db.affiliate_events.create_index("created_at")
         await self._db.affiliate_accounts.create_index("email", unique=True)
         await self._db.affiliate_accounts.create_index("telegram_id")
+        await self._db.token_balances.create_index("telegram_id", unique=True)
+        await self._db.token_ledger.create_index("created_at")
+        await self._db.token_ledger.create_index("telegram_id")
+        await self._db.token_ledger.create_index(
+            "dedupe_key",
+            unique=True,
+            partialFilterExpression={"dedupe_key": {"$type": "string"}},
+        )
 
     async def close(self) -> None:
         if self._client is not None:

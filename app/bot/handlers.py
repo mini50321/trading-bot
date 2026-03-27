@@ -10,6 +10,7 @@ from app.bot.keyboards import main_menu, settings_menu
 from app.bot.state import ConnectFlow, SettingsFlow
 from app.config import get_settings
 from app.repo.affiliate import affiliate_repo
+from app.repo.tokens import tokens_repo
 from app.repo.credentials import credentials_repo
 from app.repo.system import system_repo
 from app.repo.users import users_repo
@@ -66,7 +67,9 @@ async def help_cmd(message: Message):
         "/global_off (admin)\n"
         "/admin_users (admin)\n"
         "/admin_block <telegram_id> (admin)\n"
-        "/admin_unblock <telegram_id> (admin)"
+        "/admin_unblock <telegram_id> (admin)\n"
+        "/tokens\n"
+        "/admin_tokens <telegram_id> <delta> (admin)"
     )
 
 
@@ -79,10 +82,25 @@ async def status_cmd(message: Message):
         await message.answer("access denied")
         return
     aff = await affiliate_repo.describe_status(user.telegram_id)
+    bal = await tokens_repo.get_balance(user.telegram_id)
     await message.answer(
-        user_status_text(user) + f"\naffiliate: {aff}",
+        user_status_text(user) + f"\ntokens: {bal}\naffiliate: {aff}",
         reply_markup=main_menu(user.settings.trading_enabled),
     )
+
+
+@router.message(Command("tokens"))
+async def tokens_cmd(message: Message):
+    user = await _ensure_user_from_message(message)
+    if user is None:
+        return
+    if user.blocked:
+        await message.answer("access denied")
+        return
+    bal = await tokens_repo.get_balance(user.telegram_id)
+    st = get_settings()
+    per = int(st.tokens_per_trade) if st.token_system_enabled else 0
+    await message.answer(f"balance: {bal}\nper trade: {per}")
 
 
 @router.message(Command("settings"))
@@ -174,6 +192,14 @@ async def connect_password(message: Message, state: FSMContext):
         return
     await credentials_repo.set_credentials(user.telegram_id, email, password)
     await affiliate_repo.link_telegram_id(email, user.telegram_id)
+    pending = await affiliate_repo.take_pending_tokens(email)
+    if pending > 0:
+        await tokens_repo.add_tokens(
+            user.telegram_id,
+            pending,
+            "pending_deposit_sync",
+            {"email": email},
+        )
     await state.clear()
     try:
         await pocketoption_auth.login_for_user(user.telegram_id)
@@ -309,8 +335,9 @@ async def menu_status(cb: CallbackQuery):
         await cb.answer()
         return
     aff = await affiliate_repo.describe_status(user.telegram_id)
+    bal = await tokens_repo.get_balance(user.telegram_id)
     await cb.message.answer(
-        user_status_text(user) + f"\naffiliate: {aff}",
+        user_status_text(user) + f"\ntokens: {bal}\naffiliate: {aff}",
         reply_markup=main_menu(user.settings.trading_enabled),
     )
     await cb.answer()
@@ -800,4 +827,24 @@ async def admin_unblock(message: Message):
         return
     ok = await users_repo.set_blocked(tid, False)
     await message.answer("unblocked" if ok else "user not found")
+
+
+@router.message(Command("admin_tokens"))
+async def admin_tokens(message: Message):
+    if message.from_user is None or not _is_admin(message.from_user.id):
+        await message.answer("access denied")
+        return
+    parts = (message.text or "").split()
+    if len(parts) != 3:
+        await message.answer("usage: /admin_tokens <telegram_id> <delta>")
+        return
+    try:
+        tid = int(parts[1])
+        delta = int(parts[2])
+    except Exception:
+        await message.answer("invalid telegram_id or delta")
+        return
+    await tokens_repo.add_tokens(tid, delta, "admin_telegram", {})
+    bal = await tokens_repo.get_balance(tid)
+    await message.answer(f"ok balance={bal}")
 
