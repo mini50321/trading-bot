@@ -620,6 +620,108 @@ async def toggle_strategy(cb: CallbackQuery):
     await cb.answer()
 
 
+@router.callback_query(F.data == "set:martingale_enabled")
+async def toggle_martingale(cb: CallbackQuery):
+    user = await _ensure_user_from_callback(cb)
+    if user.blocked:
+        await cb.message.answer("access denied")
+        await cb.answer()
+        return
+    new_val = not bool(user.settings.martingale_enabled)
+    if not new_val:
+        await users_repo.set_martingale_step(user.telegram_id, 0)
+    await users_repo.update_settings(user.telegram_id, {"martingale_enabled": new_val})
+    u2 = await users_repo.get_user(user.telegram_id)
+    if u2 is not None:
+        await cb.message.answer(
+            f"martingale {'enabled' if u2.settings.martingale_enabled else 'disabled (step reset)'}",
+            reply_markup=settings_menu(),
+        )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "set:martingale_max_levels")
+async def set_martingale_levels_start(cb: CallbackQuery, state: FSMContext):
+    user = await _ensure_user_from_callback(cb)
+    if user.blocked:
+        await cb.message.answer("access denied")
+        await cb.answer()
+        return
+    await state.set_state(SettingsFlow.martingale_levels)
+    await cb.message.answer("send martingale ladder size (1-20). step 0 uses first multiplier after a win reset.")
+    await cb.answer()
+
+
+@router.message(SettingsFlow.martingale_levels)
+async def set_martingale_levels_value(message: Message, state: FSMContext):
+    user = await _ensure_user_from_message(message)
+    if user is None:
+        return
+    if user.blocked:
+        await message.answer("access denied")
+        await state.clear()
+        return
+    txt = (message.text or "").strip()
+    try:
+        v = int(txt)
+    except Exception:
+        await message.answer("invalid integer")
+        return
+    if v < 1 or v > 20:
+        await message.answer("use 1-20")
+        return
+    await users_repo.update_settings(user.telegram_id, {"martingale_max_levels": v})
+    await state.clear()
+    await message.answer("saved", reply_markup=settings_menu())
+
+
+@router.callback_query(F.data == "set:martingale_multipliers")
+async def set_martingale_csv_start(cb: CallbackQuery, state: FSMContext):
+    user = await _ensure_user_from_callback(cb)
+    if user.blocked:
+        await cb.message.answer("access denied")
+        await cb.answer()
+        return
+    await state.set_state(SettingsFlow.martingale_multipliers)
+    await cb.message.answer(
+        "send comma-separated multipliers vs base stake (e.g. 1,2,4,8,16,32,64). "
+        "first value = step 0 after win or start; each loss advances one step capped at last."
+    )
+    await cb.answer()
+
+
+@router.message(SettingsFlow.martingale_multipliers)
+async def set_martingale_csv_value(message: Message, state: FSMContext):
+    user = await _ensure_user_from_message(message)
+    if user is None:
+        return
+    if user.blocked:
+        await message.answer("access denied")
+        await state.clear()
+        return
+    txt = (message.text or "").strip()
+    if not txt:
+        await message.answer("send at least one positive number")
+        return
+    parts = [p.strip() for p in txt.split(",") if p.strip()]
+    if not parts:
+        parts = [txt]
+    ok = False
+    for p in parts:
+        try:
+            if float(p) > 0:
+                ok = True
+                break
+        except ValueError:
+            continue
+    if not ok:
+        await message.answer("invalid multipliers")
+        return
+    await users_repo.update_settings(user.telegram_id, {"martingale_multipliers_csv": txt})
+    await state.clear()
+    await message.answer("saved", reply_markup=settings_menu())
+
+
 @router.callback_query(F.data == "set:max_trades_per_day")
 async def set_mtpd_start(cb: CallbackQuery, state: FSMContext):
     user = await _ensure_user_from_callback(cb)

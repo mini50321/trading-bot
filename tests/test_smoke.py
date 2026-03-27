@@ -119,3 +119,28 @@ def test_deposit_token_brackets() -> None:
     assert deposit_tokens_for_amount(99, s) == 15
     assert deposit_tokens_for_amount(100, s) == 100
     assert deposit_tokens_for_amount(150, s) == 150
+
+
+def test_martingale_multipliers_and_stake() -> None:
+    from datetime import datetime, timezone
+
+    from app.domain.types import User, UserSettings
+    from app.services.martingale import effective_stake_for_step, multipliers_list, stake_for_trade
+
+    st = UserSettings(
+        stake=10.0,
+        martingale_enabled=True,
+        martingale_max_levels=7,
+        martingale_multipliers_csv="1,2,3",
+    )
+    assert multipliers_list(st)[:3] == [1.0, 2.0, 3.0]
+    assert effective_stake_for_step(10.0, 0, st) == 10.0
+    assert effective_stake_for_step(10.0, 5, st) >= 10.0  # capped index uses last mult * padding
+
+    u = User(
+        telegram_id=1,
+        created_at=datetime.now(timezone.utc),
+        martingale_step=2,
+        settings=st,
+    )
+    assert stake_for_trade(u) == 30.0

@@ -28,6 +28,13 @@ def settings_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="set expiry", callback_data="set:expiry"),
             ],
             [
+                InlineKeyboardButton(text="martingale on/off", callback_data="set:martingale_enabled"),
+                InlineKeyboardButton(text="mg levels (1-20)", callback_data="set:martingale_max_levels"),
+            ],
+            [
+                InlineKeyboardButton(text="mg multipliers csv", callback_data="set:martingale_multipliers"),
+            ],
+            [
                 InlineKeyboardButton(text="set assets", callback_data="set:assets"),
             ],
             [

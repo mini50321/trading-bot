@@ -19,6 +19,9 @@ class UserSettings(BaseModel):
     max_loss_per_day: float = 0.0
     cooldown_seconds: int = 0
     max_consecutive_losses: int = 0
+    martingale_enabled: bool = False
+    martingale_max_levels: int = Field(default=7, ge=1, le=20)
+    martingale_multipliers_csv: str = "1,2,4,8,16,32,64"
 
 
 class User(BaseModel):
@@ -28,6 +31,7 @@ class User(BaseModel):
     created_at: datetime
     blocked: bool = False
     settings: UserSettings = Field(default_factory=UserSettings)
+    martingale_step: int = Field(default=0, ge=0)
 
 
 class Event(BaseModel):

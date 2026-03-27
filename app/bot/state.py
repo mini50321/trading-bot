@@ -5,6 +5,8 @@ from aiogram.fsm.state import State, StatesGroup
 
 class SettingsFlow(StatesGroup):
     stake = State()
+    martingale_levels = State()
+    martingale_multipliers = State()
     expiry = State()
     assets = State()
     min_payout_percent = State()

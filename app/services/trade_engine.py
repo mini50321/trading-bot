@@ -19,6 +19,7 @@ from app.repo.users import users_repo
 from app.observability.log import log_event, log_exception, log_warning
 from app.services.assets import assets
 from app.services.market_data import market_data
+from app.services.martingale import stake_for_trade
 from app.services.pocketoption_sessions import pocketoption_sessions
 
 
@@ -216,6 +217,21 @@ class TradeEngine:
         )
         return {"eligible": len(eligible), "results": list(results)}
 
+    async def _martingale_on_settled(self, telegram_id: int, pnl: float | None) -> None:
+        if pnl is None:
+            return
+        user = await users_repo.get_user(telegram_id)
+        if user is None or not user.settings.martingale_enabled:
+            return
+        if pnl > 0:
+            await users_repo.set_martingale_step(telegram_id, 0)
+            log_event("martingale.reset_win", telegram_id=telegram_id)
+        elif pnl < 0:
+            cap = max(0, int(user.settings.martingale_max_levels) - 1)
+            new_step = min(int(user.martingale_step) + 1, cap)
+            await users_repo.set_martingale_step(telegram_id, new_step)
+            log_event("martingale.advance", telegram_id=telegram_id, step=new_step)
+
     async def finalize_settlement(self, t: Trade) -> None:
         trade_id = t.trade_id
         telegram_id = t.telegram_id
@@ -262,6 +278,8 @@ class TradeEngine:
                     pnl=out.get("pnl"),
                     err=out.get("error"),
                 )
+                if out.get("status") == "settled":
+                    await self._martingale_on_settled(telegram_id, out.get("pnl"))
                 return
 
             entry_price = t.entry_price
@@ -294,6 +312,8 @@ class TradeEngine:
                 status=status,
                 pnl=pnl,
             )
+            if status == "settled":
+                await self._martingale_on_settled(telegram_id, pnl)
         except Exception as e:
             await trades_repo.update(
                 trade_id,
@@ -311,7 +331,7 @@ class TradeEngine:
 
     async def _create_and_open(self, telegram_id: int, symbol: str, signal: StoredSignal) -> dict:
         trade_id = uuid.uuid4().hex
-        stake = float(max(0.0, signal.payload.get("stake") or 0.0)) if isinstance(signal.payload, dict) else 0.0
+        signal_stake = float(max(0.0, signal.payload.get("stake") or 0.0)) if isinstance(signal.payload, dict) else 0.0
         user = await users_repo.get_user(telegram_id)
         if user is None:
             return {"telegram_id": telegram_id, "trade_id": trade_id, "status": "failed"}
@@ -374,8 +394,16 @@ class TradeEngine:
                     except Exception:
                         pass
 
-        if stake <= 0:
+        user = await users_repo.get_user(telegram_id)
+        if user is None:
+            return {"telegram_id": telegram_id, "trade_id": trade_id, "status": "failed"}
+        if user.settings.martingale_enabled:
+            stake = stake_for_trade(user)
+        elif signal_stake > 0:
+            stake = signal_stake
+        else:
             stake = float(user.settings.stake)
+
         if user.settings.max_stake_per_trade > 0:
             stake = min(float(stake), float(user.settings.max_stake_per_trade))
         if stake <= 0:

@@ -65,6 +65,13 @@ class UsersRepo:
         await self._event("settings_updated", telegram_id, patch)
         return await self.get_user(telegram_id)
 
+    async def set_martingale_step(self, telegram_id: int, step: int) -> None:
+        step = max(0, int(step))
+        await mongo.db.users.update_one(
+            {"telegram_id": telegram_id},
+            {"$set": {"martingale_step": step}},
+        )
+
     async def set_trading_enabled(self, telegram_id: int, enabled: bool) -> bool:
         res = await mongo.db.users.update_one(
             {"telegram_id": telegram_id},

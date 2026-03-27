@@ -128,6 +128,15 @@ When **`TOKEN_SYSTEM_ENABLED=true`** (default):
 - **Telegram**: `/tokens` shows balance; `/status` includes `tokens:`. Admins: `/admin_tokens <telegram_id> <delta>` or `POST /admin/tokens/adjust` with JSON `{"telegram_id", "delta", "reason"}`.
 - Disable for dev: `TOKEN_SYSTEM_ENABLED=false` or `TOKENS_PER_TRADE=0`.
 
+### Martingale (7-lever stake ladder)
+Per-user settings (Telegram **settings** menu):
+
+- **martingale on/off**: after each **settled loss**, `martingale_step` advances (capped at `martingale_max_levels - 1`); stake = `stake` setting × multiplier for that step. After a **settled win**, step resets to **0**.
+- **mg levels**: ladder length **1–20** (default **7**).
+- **mg multipliers csv**: comma-separated factors vs **base** `stake` (default `1,2,4,8,16,32,64`). Fewer values than levels are padded by doubling the last; empty uses **2^step**.
+- **Webhook/signal stake**: when martingale is **enabled**, payload `stake` is **ignored** so the ladder stays consistent for autotrading.
+- **max_stake_per_trade** / **max_stake_per_day** still cap cumulative risk after the martingale stake is computed.
+
 ### strategy (bot makes decisions)
 If `STRATEGY_ENABLED_GLOBAL=true`, the API runs a background worker that:
 - scans users with `settings.strategy_enabled=true`
