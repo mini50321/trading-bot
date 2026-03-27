@@ -17,6 +17,7 @@ from app.repo.affiliate import affiliate_repo
 from app.services.pocketoption_auth import pocketoption_auth
 from app.services.settlement_worker import settlement_worker
 from app.services.trade_engine import trade_engine
+from app.services.affiliate_email import detect_email_confirmation
 from app.services.strategy_worker import strategy_worker
 from app.web.webhook_guard import (
     extract_client_ip,
@@ -162,12 +163,24 @@ async def affiliate_postback(
         "last_postback_at": datetime.now(timezone.utc),
         "last_postback_event": event_label or None,
     }
+    confirmed = bool(
+        email
+        and detect_email_confirmation(
+            event_label,
+            data,
+            s.affiliate_email_confirm_event_list(),
+        )
+    )
+    if confirmed:
+        patch["email_confirmed"] = True
+        patch["email_confirmed_at"] = datetime.now(timezone.utc)
     if email:
         await affiliate_repo.upsert_account_by_email(email, patch)
     log_event(
         "affiliate.postback",
         email=email or None,
         event=event_label or None,
+        email_confirmed=confirmed,
     )
     return {"ok": True}
 
@@ -268,6 +281,7 @@ async def admin_diagnostics(_: bool = Depends(_admin_auth)):
         "trades_with_error_last_24h": trades_err_24h,
         "log_level": s.log_level,
         "affiliate_gate_required": s.affiliate_gate_required,
+        "affiliate_email_confirm_required": s.affiliate_email_confirm_required,
     }
 
 

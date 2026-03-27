@@ -118,6 +118,8 @@ The API exposes `POST /affiliate/postback` so Pocket Partners (or similar) can n
 
 **Trading gate (`AFFILIATE_GATE_REQUIRED`, default `true`)**: auto-trades (webhook + strategy) are allowed only if the user has run `/connect` with the **same email** that received a postback, that email row has `telegram_id` equal to their Telegram id, and `postback_received` is true. Set `AFFILIATE_GATE_REQUIRED=false` for local dev without postbacks. `/status` shows `affiliate: verified` or `not_verified:<reason>`.
 
+**Email confirmation (`AFFILIATE_EMAIL_CONFIRM_REQUIRED`, default `true`)**: when the affiliate gate is on, trading also requires `email_confirmed` on that affiliate row. Configure a separate Pocket Partners postback for the **Email confirmation** event (in addition to registration). Incoming JSON is classified using `AFFILIATE_EMAIL_CONFIRM_EVENTS` (comma-separated substrings matched case-insensitively against the event field), and optional payload keys `email_confirmed` / `email_verified` / `is_email_confirmed`. Set `AFFILIATE_EMAIL_CONFIRM_REQUIRED=false` to skip (e.g. staging).
+
 ### strategy (bot makes decisions)
 If `STRATEGY_ENABLED_GLOBAL=true`, the API runs a background worker that:
 - scans users with `settings.strategy_enabled=true`

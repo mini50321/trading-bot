@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     affiliate_postback_hmac_secret: str = ""
     affiliate_trust_x_forwarded_for: bool = False
     affiliate_gate_required: bool = True
+    affiliate_email_confirm_required: bool = True
+    affiliate_email_confirm_events: str = (
+        "email confirmation,email_confirmation,emailconfirmed,confirm_email,mail_confirm"
+    )
 
     strategy_enabled_global: bool = False
     strategy_poll_interval_seconds: float = 1.0
@@ -112,6 +116,12 @@ class Settings(BaseSettings):
 
     def optional_affiliate_postback_hmac_secret(self) -> str:
         return self.affiliate_postback_hmac_secret.strip()
+
+    def affiliate_email_confirm_event_list(self) -> list[str]:
+        raw = self.affiliate_email_confirm_events.strip()
+        if not raw:
+            return []
+        return [x for x in (p.strip() for p in raw.split(",")) if x]
 
     def pocketoption_place_trade_enabled(self) -> bool:
         return bool(self.po_api_base_url.strip() and self.po_place_trade_path.strip())

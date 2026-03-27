@@ -67,3 +67,20 @@ def test_observability_log_event_does_not_raise() -> None:
 
     log_event("smoke.test", foo="bar", n=1)
     log_warning("smoke.warn", x=True)
+
+
+def test_detect_email_confirmation_event_label() -> None:
+    from app.services.affiliate_email import detect_email_confirmation
+
+    pats = ["email confirmation", "email_confirmation"]
+    assert detect_email_confirmation("Email Confirmation", {}, pats)
+    assert detect_email_confirmation("foo_email_confirmation_bar", {}, pats)
+    assert not detect_email_confirmation("registration", {}, pats)
+
+
+def test_detect_email_confirmation_payload_flags() -> None:
+    from app.services.affiliate_email import detect_email_confirmation
+
+    assert detect_email_confirmation("", {"email_confirmed": True}, [])
+    assert detect_email_confirmation("", {"email_verified": "yes"}, [])
+    assert not detect_email_confirmation("", {"email_confirmed": False}, [])
