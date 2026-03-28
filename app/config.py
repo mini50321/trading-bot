@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -78,7 +79,8 @@ class Settings(BaseSettings):
     master_key: str = ""
     admin_api_key: str = ""
     http_host: str = "0.0.0.0"
-    http_port: int = 8000
+    # Heroku sets PORT; local .env can use HTTP_PORT or default 8000.
+    http_port: int = Field(default=8000, validation_alias=AliasChoices("PORT", "HTTP_PORT"))
     settlement_poll_interval_seconds: float = 1.0
     log_level: str = "INFO"
 
