@@ -20,6 +20,28 @@ from app.services.pocketoption_auth import pocketoption_auth
 
 router = Router()
 
+HELP_TEXT = (
+    "/start\n"
+    "/help\n"
+    "/status\n"
+    "/settings\n"
+    "/connect\n"
+    "/disconnect\n"
+    "/account\n"
+    "/watch <symbols>\n"
+    "/unwatch <symbols|all>\n"
+    "/prices\n"
+    "/enable\n"
+    "/disable\n"
+    "/global_on (admin)\n"
+    "/global_off (admin)\n"
+    "/admin_users (admin)\n"
+    "/admin_block <telegram_id> (admin)\n"
+    "/admin_unblock <telegram_id> (admin)\n"
+    "/tokens\n"
+    "/admin_tokens <telegram_id> <delta> (admin)"
+)
+
 
 def _is_admin(user_id: int) -> bool:
     return user_id in get_settings().admin_ids()
@@ -49,28 +71,10 @@ async def start(message: Message, state: FSMContext):
     await message.answer("welcome", reply_markup=main_menu(user.settings.trading_enabled))
 
 
-@router.message(Command("help"))
-async def help_cmd(message: Message):
-    await message.answer(
-        "/start\n"
-        "/status\n"
-        "/settings\n"
-        "/connect\n"
-        "/disconnect\n"
-        "/account\n"
-        "/watch <symbols>\n"
-        "/unwatch <symbols|all>\n"
-        "/prices\n"
-        "/enable\n"
-        "/disable\n"
-        "/global_on (admin)\n"
-        "/global_off (admin)\n"
-        "/admin_users (admin)\n"
-        "/admin_block <telegram_id> (admin)\n"
-        "/admin_unblock <telegram_id> (admin)\n"
-        "/tokens\n"
-        "/admin_tokens <telegram_id> <delta> (admin)"
-    )
+@router.message(Command("help", ignore_mention=True))
+async def help_cmd(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer(HELP_TEXT)
 
 
 @router.message(Command("status"))
@@ -351,6 +355,21 @@ async def menu_settings(cb: CallbackQuery):
         await cb.answer()
         return
     await cb.message.answer("settings", reply_markup=settings_menu())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "menu:help")
+async def menu_help(cb: CallbackQuery, state: FSMContext):
+    user = await _ensure_user_from_callback(cb)
+    if user is None:
+        await cb.answer()
+        return
+    if user.blocked:
+        await cb.message.answer("access denied")
+        await cb.answer()
+        return
+    await state.clear()
+    await cb.message.answer(HELP_TEXT)
     await cb.answer()
 
 

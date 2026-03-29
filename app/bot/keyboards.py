@@ -11,6 +11,9 @@ def main_menu(trading_enabled: bool) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="status", callback_data="menu:status"),
             ],
             [
+                InlineKeyboardButton(text="help", callback_data="menu:help"),
+            ],
+            [
                 InlineKeyboardButton(
                     text=("disable trading" if trading_enabled else "enable trading"),
                     callback_data=("trade:disable" if trading_enabled else "trade:enable"),
