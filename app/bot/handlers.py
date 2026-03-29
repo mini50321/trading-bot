@@ -74,7 +74,8 @@ async def start(message: Message, state: FSMContext):
 @router.message(Command("help", ignore_mention=True))
 async def help_cmd(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer(HELP_TEXT)
+    # Plain text: HELP_TEXT contains <symbols> etc.; HTML parse mode would reject it.
+    await message.answer(HELP_TEXT, parse_mode=None)
 
 
 @router.message(Command("status"))
@@ -369,7 +370,7 @@ async def menu_help(cb: CallbackQuery, state: FSMContext):
         await cb.answer()
         return
     await state.clear()
-    await cb.message.answer(HELP_TEXT)
+    await cb.message.answer(HELP_TEXT, parse_mode=None)
     await cb.answer()
 
 
